@@ -6,15 +6,12 @@ from telebot import types
 bot = telebot.TeleBot(BOT_TOKEN)
 #conn = sqlite3.connect('db/database.db', check_same_thread=False)
 #cursor = conn.cursor()
-choiceNumber = 0
-choiceLetter = 0
-choiceSchedule = 0
 
 @bot.message_handler(commands=['start'])
 def handle_message(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    btn1 = types.KeyboardButton("Старшие классы (10-11)")
-    btn2 = types.KeyboardButton("Средние классы (5-9)")
+    btn1 = types.KeyboardButton("Средние классы (5-9)")
+    btn2 = types.KeyboardButton("Старшие классы (10-11)")
     markup.add(btn1, btn2)
     bot.send_message(message.chat.id, 
                      text="Привет, {0.first_name}! Я тестовый бот для вывода расписания.".format(message.from_user), 
@@ -41,6 +38,7 @@ def func(message):
         bot.send_message(message.chat.id, text="Выбери свой класс", reply_markup=markup)  
 
     elif message.text in ["10 класс", "11 класс", "9 класс", "8 класс", "7 класс", "6 класс", "5 класс"]:
+        choiceClass = message.text[0:2].strip()    
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         letters = ["А", "Б"]  
         if message.text in ["7 класс", "8 класс"]:  
@@ -56,6 +54,8 @@ def func(message):
         bot.send_message(message.chat.id, text="Выбери букву класса", reply_markup=markup)
 
     elif message.text in ["А", "Б", "В", "Г"]:
+        if choiceClass in [str(x) for x in range(5, 12)]:
+            choiceClass += message.text
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         btn1 = types.KeyboardButton("На сегодня")
         btn2 = types.KeyboardButton("На завтра")
