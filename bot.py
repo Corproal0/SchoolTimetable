@@ -1,73 +1,86 @@
-import telebot
-import sqlite3
+
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message
+from aiogram.filters import Command
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import BotCommand
 from config import BOT_TOKEN
-from telebot import types
+from database import add_schedule_entry, get_today_schedule, hide_schedule, init_db
 
-bot = telebot.TeleBot(BOT_TOKEN)
-#conn = sqlite3.connect('db/database.db', check_same_thread=False)
-#cursor = conn.cursor()
+async def main():
+    # Инициализация бота и диспетчера
+    bot = Bot(token=BOT_TOKEN)
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
 
+    # Функция для установки команд бота
+    async def set_commands(bot: Bot):
+        commands = [
+            BotCommand(command="start", description="Начать использование"),
+            BotCommand(command="help", description="Получить справку"),
+            BotCommand(command="add_lesson", description="Добавить урок в расписание"),
+            BotCommand(command="schedule", description="Показать расписание на сегодня"),
+            BotCommand(command="hide_lesson", description="Скрыть урок из расписания")
+        ]
+        await bot.set_my_commands(commands)
 
-@bot.message_handler(commands=['start'])
-def handle_message(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    btn1 = types.KeyboardButton("Старшие классы (10-11)")
-    btn2 = types.KeyboardButton("Средние классы (5-9)")
-    markup.add(btn1, btn2)
-    bot.send_message(message.chat.id, 
-                     text="Привет, {0.first_name}! Я тестовый бот для вывода расписания.".format(message.from_user), 
-                     reply_markup=markup)
-@bot.message_handler(content_types=['text'])
-def func(message):
-    if message.text == "Старшие классы (10-11)":
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn1 = types.KeyboardButton("10 класс")
-        btn2 = types.KeyboardButton("11 класс")
-        back = types.KeyboardButton("Вернуться в главное меню")
-        markup.add(btn1, btn2, back)
-        bot.send_message(message.chat.id, text="Выбери свой класс", reply_markup=markup) 
+    # Обработчик команды "start" и "help"
+    async def send_welcome(message: Message):
+        await message.answer("Привет! Вот что я могу:\n"
+                             "/add_lesson - Добавить урок в расписание (формат: Предмет : Преподаватель : Кабинет)\n"
+                             "/schedule - Показать расписание на сегодня\n"
+                             "/hide_lesson - Скрыть урок из расписания (формат: Номер урока)")
 
-    elif message.text == "Средние классы (5-9)":
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn1 = types.KeyboardButton("5 класс")
-        btn2 = types.KeyboardButton("6 класс")
-        btn3 = types.KeyboardButton("7 класс")
-        btn4 = types.KeyboardButton("8 класс")
-        btn5 = types.KeyboardButton("9 класс")
-        back = types.KeyboardButton("Вернуться в главное меню")
-        markup.add(btn1, btn2, btn3, btn4, btn5, back)
-        bot.send_message(message.chat.id, text="Выбери свой класс", reply_markup=markup)  
+    # Обработчик команды "add_lesson"
+    async def add_schedule_command(message: Message):
+        try:
+            args = message.text.split(" ")[1:]
+            if len(args) != 3:
+                await message.reply("Формат должен быть: Предмет : Преподаватель : Кабинет")
+                return
 
-    elif message.text in ["10 класс", "11 класс", "9 класс", "8 класс", "7 класс", "6 класс", "5 класс"]:
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        letters = ["А", "Б"]  
-        if message.text in ["7 класс", "8 класс"]:  
-            letters += ["В", "Г"]
-        if message.text == "9 класс":  
-            letters.append("В")
-        
-        for letter in letters:
-            markup.add(types.KeyboardButton(letter))
-        
-        back = types.KeyboardButton("Вернуться в главное меню")
-        markup.add(back)
-        bot.send_message(message.chat.id, text="Выбери букву класса", reply_markup=markup)
+            subject, teachers, classroom = args
+            result, msg = add_schedule_entry(subject, teachers, classroom)
+            await message.answer(msg)
+        except Exception as e:
+            await message.answer(f"Ошибка: {e}")
 
-    elif message.text in ["А", "Б", "В", "Г"]:
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn1 = types.KeyboardButton("На сегодня")
-        btn2 = types.KeyboardButton("На завтра")
-        btn3 = types.KeyboardButton("На неделю")
-        back = types.KeyboardButton("Вернуться в главное меню")
-        markup.add(btn1, btn2, btn3, back)
-        bot.send_message(message.chat.id, text=f"Вы выбрали класс с буквой {message.text}. Какое расписание вам нужно?", reply_markup=markup)
+    # Обработчик команды "schedule"
+    async def today_schedule_command(message: Message):
+        schedule_messages = get_today_schedule()
+        if not schedule_messages:
+            await message.answer("На сегодня уроков нет.")
+        else:
+            reply_message = "Расписание на сегодня:\n" + "\n".join(schedule_messages)
+            await message.answer(reply_message)
 
-    elif message.text in ["На сегодня", "На завтра", "На неделю"]:
-       
-        bot.send_message(message.chat.id, text=f"Вы выбрали расписание {message.text}. Получение данных...")
+    # Обработчик команды "hide_lesson"
+    async def hide_schedule_command(message: Message):
+        try:
+            lesson_number = int(message.text.split(" ")[1])
+            result_message = hide_schedule(lesson_number)
+            await message.answer(result_message)
+        except ValueError:
+            await message.answer("Пожалуйста, укажите номер урока.")
+        except Exception as e:
+            await message.answer(f"Ошибка: {e}")
 
-    elif message.text == "Вернуться в главное меню":
-        handle_message(message)  
+    # Регистрация обработчиков
+    dp.message.register(send_welcome, Command(commands=["start", "help"]))
+    dp.message.register(add_schedule_command, Command(commands=["add_lesson"]))
+    dp.message.register(today_schedule_command, Command(commands=["schedule"]))
+    dp.message.register(hide_schedule_command, Command(commands=["hide_lesson"]))
+
+    # Установка команд бота
+    await set_commands(bot)
+
+    # Инициализация базы данных
+    init_db()
+    print("База данных успешно инициализирована.")
+
+    # Запуск polling
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    bot.polling(none_stop=True)
+    import asyncio
+    asyncio.run(main())
